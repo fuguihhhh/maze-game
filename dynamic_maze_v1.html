@@ -31,6 +31,22 @@
   .panel{width:min(88%,520px);background:#0d1220;border:1px solid #2b3957;border-radius:18px;padding:22px;text-align:center;box-shadow:0 18px 60px rgba(0,0,0,.35)}
   .panel h1{margin:0 0 8px;font-size:28px}
   .panel p{margin:8px 0;color:#b8c5db;line-height:1.55}
+
+  .legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0;text-align:left}
+  .legend-item{display:flex;align-items:center;gap:9px;padding:8px 9px;border:1px solid #263653;border-radius:10px;background:#0a1020;color:#c9d5e7;font-size:12px;line-height:1.3}
+  .legend-icon{width:20px;height:20px;flex:0 0 20px;position:relative}
+  .legend-dot{border-radius:50%}
+  .legend-player{background:#ffc857;border:2px solid #fff1b8;box-shadow:0 0 8px rgba(255,200,87,.28)}
+  .legend-b1{background:#5cbfff;border:2px solid #e1ecff}
+  .legend-b2{background:#b87eff;border:2px solid #e1ecff}
+  .legend-exit{background:#3ee0bb;border:2px solid #b9fff0;box-shadow:0 0 9px rgba(62,224,187,.28)}
+  .legend-event{width:15px;height:15px;margin:2px;transform:rotate(45deg);background:#ff9c55;border:1px solid #fff}
+  .legend-scan{border:2px solid #5cbfff;border-radius:50%;box-shadow:0 0 8px rgba(92,191,255,.25)}
+  .legend-rescue:before,.legend-rescue:after{content:"";position:absolute;width:5px;height:5px;border-radius:50%;background:#7ed3ff;top:8px}
+  .legend-rescue:before{left:2px}.legend-rescue:after{right:2px}
+  .legend-wall{border:2px solid #ffb46e;background:rgba(255,128,64,.24);box-shadow:0 0 8px rgba(255,128,64,.28)}
+  .legend-note{font-size:11px;color:#8ea2bf;margin-top:2px}
+  @media(max-width:560px){.legend{grid-template-columns:1fr}.panel{padding:16px}.legend-item{padding:7px 8px}}
   .panel button,.btn{border:0;border-radius:12px;padding:11px 16px;background:#4f79a8;color:white;font-weight:700;cursor:pointer}
   .panel button:hover,.btn:hover{filter:brightness(1.08)}
   .controls{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -83,7 +99,7 @@
     <canvas id="game"></canvas>
     <div class="progress-badge neutral" id="progressBadge">当前目标：信标Ⅰ</div>
     <div class="minimap-wrap"><div class="minimap-title">记忆地图 · 暗色为已探索</div><canvas id="minimap" width="150" height="150"></canvas></div>
-    <div class="beacon-status" id="beaconStatus">○ 信标Ⅰ　○ 信标Ⅱ　○ 出口</div>
+    <div class="beacon-status" id="beaconStatus"><span style="color:#ffb46e">橙色 = 真墙变化</span>　○ 信标Ⅰ　○ 信标Ⅱ　○ 出口</div>
     <div class="choice-overlay" id="choiceOverlay">
       <div class="choice-card">
         <h3 id="choiceTitle">迷宫事件</h3>
@@ -97,8 +113,19 @@
     <div class="overlay" id="overlay">
       <div class="panel">
         <h1>动态迷宫</h1>
-        <p>你只能看到附近区域。整局分为探索、迷宫苏醒、逃脱三阶段。先找到信标Ⅰ，再找到信标Ⅱ，最后寻找出口；顶部会始终指向当前目标。</p>
-        <p>电脑：方向键 / WASD；信标Ⅰ后解锁 Q 键扫描。手机可用方向键、滑动和“扫描”按钮。迷宫中还会出现可选择的小事件。</p>
+        <p>先认图形，再进入迷宫。目标顺序：<b>信标Ⅰ → 信标Ⅱ → 出口</b>。</p>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-icon legend-dot legend-player"></span><span><b>你</b><div class="legend-note">暖黄色圆点</div></span></div>
+          <div class="legend-item"><span class="legend-icon legend-dot legend-b1"></span><span><b>信标Ⅰ</b><div class="legend-note">蓝色；找到后解锁扫描</div></span></div>
+          <div class="legend-item"><span class="legend-icon legend-dot legend-b2"></span><span><b>信标Ⅱ</b><div class="legend-note">紫色；强化扫描并锁定出口</div></span></div>
+          <div class="legend-item"><span class="legend-icon legend-dot legend-exit"></span><span><b>出口</b><div class="legend-note">青绿色；逃脱阶段启用</div></span></div>
+          <div class="legend-item"><span class="legend-icon legend-event"></span><span><b>选择事件</b><div class="legend-note">菱形；踩上后进行二选一</div></span></div>
+          <div class="legend-item"><span class="legend-icon legend-scan"></span><span><b>扫描</b><div class="legend-note">Q键/扫描按钮；扩大记忆地图</div></span></div>
+          <div class="legend-item"><span class="legend-icon legend-rescue"></span><span><b>救援路径</b><div class="legend-note">浅蓝点；卡住时提示前几格</div></span></div>
+          <div class="legend-item"><span class="legend-icon legend-wall"></span><span><b>真实墙体变化</b><div class="legend-note">只有橙色预警才表示墙真的变了</div></span></div>
+        </div>
+        <p>暗色区域只是“记忆中的迷宫”，不是墙在移动。真正结构变化一定会先出现橙色预警。</p>
+        <p>电脑：方向键 / WASD；信标Ⅰ后按 Q 扫描。手机：方向键、滑动和“扫描”按钮。</p>
         <button id="startBtn">开始游戏</button>
       </div>
     </div>
@@ -165,6 +192,7 @@
   let pendingMazeChange=false;
   let scanUnlocked=false, scanReadyAt=0, scanPulseUntil=0, scanCooldownMs=24000;
   let wallChangeFx=[];
+  let ambiencePulse=0, escapeSurgeAt=0, lastAmbientEventAt=0;
   let eventNodes=[], activeChoice=null, eventFreezeUntil=0, choiceStartedAt=0;
   let camX=1, camY=1, renderCamX=1, renderCamY=1;
 
@@ -313,7 +341,9 @@
       scanReadyAt=0;
       scanCooldownMs=24000;
     wallChangeFx=[];
+    ambiencePulse=0; escapeSurgeAt=0; lastAmbientEventAt=0;
       scanPulseUntil=performance.now()+2600;
+      ambiencePulse=performance.now()+2200;
       revealScanArea(10);
       progressText='信标Ⅰ：扫描能力已解锁';
       progressTone='good';
@@ -324,6 +354,7 @@
       scanCooldownMs=16000;
       scanReadyAt=0; // immediate free recharge
       scanPulseUntil=performance.now()+3200;
+      ambiencePulse=performance.now()+2600;\n      escapeSurgeAt=performance.now()+7000;
       revealScanArea(12);
       eventFreezeUntil=performance.now()+10000;
       progressText='信标Ⅱ：出口锁定，扫描强化';
@@ -867,8 +898,15 @@
     // No hostile dynamic wall changes during exploration.
     if(stage===0 || now<rescueUntil || now<eventFreezeUntil || pendingMazeChange || activeChoice) return;
 
+    const ambientGap = stage===1 ? 26000 : 18000;
+    if(now-lastAmbientEventAt>ambientGap && Math.random()<0.45){
+      lastAmbientEventAt=now;
+      ambiencePulse=now+1800;
+      pulseMessage(stage===1 ? '迷宫深处传来一阵低沉震动。' : '逃脱阶段：迷宫出现强烈脉冲。');
+    }
+
     // Maze awakens slowly, then becomes a bit more active during escape.
-    const chance = stage===1 ? 0.055 : 0.085;
+    const chance = stage===1 ? 0.065 : 0.100;
     if(Math.random()<chance){
       const kind=Math.random()<0.55?'behind':'ahead';
       scheduleMazeChange(kind);
@@ -878,7 +916,8 @@
   function scheduleMazeChange(kind){
     if(pendingMazeChange || performance.now()<rescueUntil || stage===0) return;
     pendingMazeChange=true;
-    pulseMessage(kind==='ahead' ? '⚠ 前方远处传来墙体移动的预兆。' : '⚠ 身后远处传来墙体移动的预兆。');
+    pulseMessage(kind==='ahead' ? '⚠ 橙色预警：前方远处墙体即将变化。' : '⚠ 橙色预警：身后远处墙体即将变化。');
+    ambiencePulse=performance.now()+1300;
     setTimeout(()=>{
       if(!running || performance.now()<rescueUntil){pendingMazeChange=false;return;}
       const changed=kind==='ahead'?mutateAheadPlayer(true):mutateBehindPlayer(true);
@@ -1076,6 +1115,20 @@
     ctx.beginPath(); ctx.arc(px,py,tile*.29,0,Math.PI*2);
     ctx.fillStyle='#ffc857'; ctx.fill();
     ctx.strokeStyle='#fff1b8'; ctx.lineWidth=2; ctx.stroke();
+
+    // Stage ambience pulse: drama only, never changes geometry.
+    const ambNow=performance.now();
+    if(ambNow<ambiencePulse){
+      const remain=Math.max(0,(ambiencePulse-ambNow)/2200);
+      ctx.save();
+      ctx.strokeStyle=stage===1
+        ? `rgba(94,146,255,${0.08+remain*.12})`
+        : `rgba(255,120,72,${0.08+remain*.14})`;
+      ctx.lineWidth=2;
+      const inset=10+(1-remain)*18;
+      ctx.strokeRect(inset,inset,cssW-inset*2,cssH-inset*2);
+      ctx.restore();
+    }
 
     // True maze changes have a dedicated orange animation.
     const fxNow=performance.now();
