@@ -82,7 +82,7 @@
   <div class="game-shell" id="shell">
     <canvas id="game"></canvas>
     <div class="progress-badge neutral" id="progressBadge">当前目标：信标Ⅰ</div>
-    <div class="minimap-wrap"><div class="minimap-title">记忆地图</div><canvas id="minimap" width="150" height="150"></canvas></div>
+    <div class="minimap-wrap"><div class="minimap-title">记忆地图 · 暗色为已探索</div><canvas id="minimap" width="150" height="150"></canvas></div>
     <div class="beacon-status" id="beaconStatus">○ 信标Ⅰ　○ 信标Ⅱ　○ 出口</div>
     <div class="choice-overlay" id="choiceOverlay">
       <div class="choice-card">
@@ -164,8 +164,9 @@
   let lastDistanceToTarget=null, correctStreak=0, progressText='当前目标：信标Ⅰ', progressTone='neutral';
   let pendingMazeChange=false;
   let scanUnlocked=false, scanReadyAt=0, scanPulseUntil=0, scanCooldownMs=24000;
+  let wallChangeFx=[];
   let eventNodes=[], activeChoice=null, eventFreezeUntil=0, choiceStartedAt=0;
-  let camX=1, camY=1;
+  let camX=1, camY=1, renderCamX=1, renderCamY=1;
 
   function resize(){
     const r = shell.getBoundingClientRect();
@@ -311,6 +312,7 @@
       scanUnlocked=true;
       scanReadyAt=0;
       scanCooldownMs=24000;
+    wallChangeFx=[];
       scanPulseUntil=performance.now()+2600;
       revealScanArea(10);
       progressText='信标Ⅰ：扫描能力已解锁';
@@ -345,7 +347,7 @@
     }
 
     player={...start};
-    camX=player.x; camY=player.y;
+    camX=player.x; camY=player.y; renderCamX=camX; renderCamY=camY;
     stage=0;
     currentTarget=beacons[0];
     seen=Array.from({length:ROWS},()=>Array(COLS).fill(0));
@@ -552,7 +554,7 @@
   }
 
   function updateCamera(){
-    const dead=2.4;
+    const dead=3.2;
     if(player.x-camX>dead) camX=player.x-dead;
     else if(player.x-camX<-dead) camX=player.x+dead;
     if(player.y-camY>dead) camY=player.y-dead;
@@ -806,7 +808,14 @@
       const p=candidates[randInt(0,candidates.length-1)];
       maze[p.y][p.x]=p.newVal;
       mutationHistory.set(key(p.x,p.y),now);
+
       if(!preferOpen){
+        wallChangeFx.push({
+          x:p.x,y:p.y,
+          started:performance.now(),
+          duration:1200,
+          kind:p.newVal===1?'close':'open'
+        });
         lastMutationAt=now;
         lastDistanceToTarget=null;
         correctStreak=0;
@@ -931,31 +940,54 @@
     const cssW=canvas.clientWidth||800, cssH=canvas.clientHeight||600;
     ctx.clearRect(0,0,cssW,cssH);
 
-    const tile=Math.max(18,Math.floor(Math.min(cssW/19, cssH/19)));
-    const viewTilesX=Math.ceil(cssW/tile)+2, viewTilesY=Math.ceil(cssH/tile)+2;
-    const ox=Math.floor(cssW/2 - camX*tile - tile/2);
-    const oy=Math.floor(cssH/2 - camY*tile - tile/2);
+    const tile=Math.max(20,Math.floor(Math.min(cssW/17.5, cssH/17.5)));
+    const viewTilesX=Math.ceil(cssW/tile)+6, viewTilesY=Math.ceil(cssH/tile)+6;
+    const ox=Math.floor(cssW/2 - renderCamX*tile - tile/2);
+    const oy=Math.floor(cssH/2 - renderCamY*tile - tile/2);
 
     ctx.fillStyle='#03050a'; ctx.fillRect(0,0,cssW,cssH);
     if(!maze||!player) return;
 
-    const minX=Math.max(0,Math.floor(-ox/tile)-1), maxX=Math.min(COLS-1,minX+viewTilesX);
-    const minY=Math.max(0,Math.floor(-oy/tile)-1), maxY=Math.min(ROWS-1,minY+viewTilesY);
+    const minX=Math.max(0,Math.floor(-ox/tile)-3), maxX=Math.min(COLS-1,minX+viewTilesX);
+    const minY=Math.max(0,Math.floor(-oy/tile)-3), maxY=Math.min(ROWS-1,minY+viewTilesY);
 
     for(let y=minY;y<=maxY;y++) for(let x=minX;x<=maxX;x++){
       const state=seen[y][x];
       if(state===0) continue;
       const px=ox+x*tile, py=oy+y*tile;
 
+      const dxp=x-player.x, dyp=y-player.y;
+      const dist=Math.sqrt(dxp*dxp+dyp*dyp);
+
+      // Explored geometry persists. Current visibility changes brightness only.
+      const currentVisible = state===2;
+      const remembered = state===1;
+
       if(maze[y][x]===1){
-        ctx.fillStyle=state===2?'#2b3548':'#121722';
+        if(currentVisible){
+          ctx.fillStyle=dist<=5?'#33415a':'#2b3548';
+        }else if(remembered){
+          ctx.fillStyle='#263247';
+        }else{
+          ctx.fillStyle='#05070c';
+        }
         ctx.fillRect(px,py,tile+1,tile+1);
-        if(state===2){
-          ctx.strokeStyle='rgba(176,194,220,.13)';
+
+        if(currentVisible){
+          ctx.strokeStyle='rgba(190,207,230,.16)';
+          ctx.strokeRect(px+.5,py+.5,tile-1,tile-1);
+        }else if(remembered){
+          ctx.strokeStyle='rgba(135,151,176,.08)';
           ctx.strokeRect(px+.5,py+.5,tile-1,tile-1);
         }
       }else{
-        ctx.fillStyle=state===2?'#141d2b':'#080c14';
+        if(currentVisible){
+          ctx.fillStyle=dist<=5?'#182334':'#141d2b';
+        }else if(remembered){
+          ctx.fillStyle='#131c29';
+        }else{
+          ctx.fillStyle='#05070c';
+        }
         ctx.fillRect(px,py,tile+1,tile+1);
       }
     }
@@ -1045,12 +1077,48 @@
     ctx.fillStyle='#ffc857'; ctx.fill();
     ctx.strokeStyle='#fff1b8'; ctx.lineWidth=2; ctx.stroke();
 
+    // True maze changes have a dedicated orange animation.
+    const fxNow=performance.now();
+    wallChangeFx=wallChangeFx.filter(fx=>fxNow-fx.started<fx.duration);
+    for(const fx of wallChangeFx){
+      const age=(fxNow-fx.started)/fx.duration;
+      const fxX=ox+fx.x*tile, fxY=oy+fx.y*tile;
+      const alpha=Math.max(0,1-age);
+      ctx.save();
+
+      // First half: warning glow. Second half: fading confirmation.
+      const warning=age<0.5 ? 1-age*2 : 0;
+      const settle=age>=0.5 ? 1-(age-0.5)*2 : 1;
+
+      ctx.fillStyle=`rgba(255,128,64,${0.10+alpha*0.24})`;
+      ctx.fillRect(fxX,fxY,tile,tile);
+
+      if(warning>0){
+        ctx.strokeStyle=`rgba(255,202,145,${0.55+warning*0.35})`;
+        ctx.lineWidth=2.5+warning*2;
+        ctx.strokeRect(fxX+2,fxY+2,tile-4,tile-4);
+
+        ctx.beginPath();
+        ctx.moveTo(fxX+tile*.18,fxY+tile*.5);
+        ctx.lineTo(fxX+tile*.82,fxY+tile*.5);
+        ctx.strokeStyle=`rgba(255,155,80,${0.55+warning*.35})`;
+        ctx.lineWidth=2;
+        ctx.stroke();
+      }else{
+        ctx.strokeStyle=`rgba(255,168,98,${0.25+settle*0.35})`;
+        ctx.lineWidth=2;
+        ctx.strokeRect(fxX+3,fxY+3,tile-6,tile-6);
+      }
+
+      ctx.restore();
+    }
+
     // Soft vignette around vision radius.
-    const grad=ctx.createRadialGradient(px,py,tile*4.2,px,py,tile*(VISION+1.8));
+    const grad=ctx.createRadialGradient(px,py,tile*5.5,px,py,tile*(VISION+3.2));
     grad.addColorStop(0,'rgba(0,0,0,0)');
-    grad.addColorStop(.62,'rgba(0,0,0,.04)');
-    grad.addColorStop(.86,'rgba(0,0,0,.20)');
-    grad.addColorStop(1,'rgba(0,0,0,.56)');
+    grad.addColorStop(.55,'rgba(0,0,0,0)');
+    grad.addColorStop(.82,'rgba(0,0,0,.10)');
+    grad.addColorStop(1,'rgba(0,0,0,.32)');
     ctx.fillStyle=grad; ctx.fillRect(0,0,cssW,cssH);
   }
 
@@ -1184,6 +1252,12 @@
   function gameLoop(t){
     const dt = lastFrameAt ? Math.min(0.1,(t-lastFrameAt)/1000) : 1/60;
     lastFrameAt=t;
+
+    // Smooth visual camera: target camera still uses dead-zone, render camera eases toward it.
+    const camEase=Math.min(1,dt*7.5);
+    renderCamX += (camX-renderCamX)*camEase;
+    renderCamY += (camY-renderCamY)*camEase;
+
     if(running){
       elapsed=(t-startedAt)/1000;
       if(messageCooldown>0) messageCooldown-=dt;
