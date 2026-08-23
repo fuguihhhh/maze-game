@@ -6,31 +6,39 @@
 <title>动态迷宫 · 第一版</title>
 <style>
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:#0b1020;color:#eaf0ff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
+  html,body{margin:0;height:100%;background:#07090f;color:#edf2ff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
   body{display:flex;align-items:center;justify-content:center}
   .wrap{width:min(96vw,980px);height:min(94vh,760px);display:grid;grid-template-rows:auto 1fr auto;gap:10px}
-  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#121936;border:1px solid #25315f;border-radius:14px;padding:10px 14px}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0d1220;border:1px solid #25314a;border-radius:14px;padding:10px 14px}
   .stats{display:flex;gap:14px;flex-wrap:wrap;font-size:14px}
   .stat b{font-size:16px}
-  .signal{display:inline-flex;align-items:center;gap:5px}
-  .signal-arrow{display:inline-block;min-width:22px;text-align:center;font-size:22px;line-height:1}
+  .signal{display:inline-flex;align-items:center;gap:5px;color:#7fe8d1}
+  .signal-arrow{display:inline-block;min-width:22px;text-align:center;font-size:22px;line-height:1;color:#3ee0bb;text-shadow:0 0 10px rgba(62,224,187,.28)}
   .game-shell.exit-shift{animation:exitShift .7s ease}
   @keyframes exitShift{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
   .title{font-weight:800;letter-spacing:.5px}
-  .game-shell{position:relative;background:#070b16;border:1px solid #27325d;border-radius:18px;overflow:hidden;min-height:0}
+  .game-shell{position:relative;background:#05070c;border:1px solid #222c42;border-radius:18px;overflow:hidden;min-height:0}
+  .minimap-wrap{position:absolute;top:12px;right:12px;z-index:3;background:rgba(4,7,12,.84);border:1px solid #2b3b57;border-radius:12px;padding:7px;backdrop-filter:blur(3px)}
+  .minimap-title{font-size:12px;font-weight:800;color:#b9c7dc;text-align:center;margin-bottom:5px;letter-spacing:.5px}
+  #minimap{display:block;width:145px;height:145px;border-radius:8px;background:#03050a}
+  .progress-badge{position:absolute;left:12px;top:12px;z-index:3;padding:7px 10px;border-radius:10px;background:rgba(4,7,12,.84);border:1px solid #2b3b57;font-size:13px;font-weight:800;backdrop-filter:blur(3px)}
+  .progress-badge.good{color:#61e8b9;border-color:#2e705d}
+  .progress-badge.bad{color:#ffad76;border-color:#7a4c2c}
+  .progress-badge.neutral{color:#b6c4d8}
+  .beacon-status{position:absolute;left:12px;bottom:12px;z-index:3;padding:7px 10px;border-radius:10px;background:rgba(4,7,12,.84);border:1px solid #2b3b57;font-size:12px;color:#cbd7e9;backdrop-filter:blur(3px)}
   canvas{width:100%;height:100%;display:block;touch-action:none}
-  .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(5,8,16,.78);backdrop-filter:blur(4px);z-index:5}
-  .panel{width:min(88%,520px);background:#121936;border:1px solid #314071;border-radius:18px;padding:22px;text-align:center;box-shadow:0 18px 60px rgba(0,0,0,.35)}
+  .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(3,5,9,.82);backdrop-filter:blur(4px);z-index:5}
+  .panel{width:min(88%,520px);background:#0d1220;border:1px solid #2b3957;border-radius:18px;padding:22px;text-align:center;box-shadow:0 18px 60px rgba(0,0,0,.35)}
   .panel h1{margin:0 0 8px;font-size:28px}
-  .panel p{margin:8px 0;color:#b9c5e5;line-height:1.55}
-  .panel button,.btn{border:0;border-radius:12px;padding:11px 16px;background:#6f8cff;color:white;font-weight:700;cursor:pointer}
+  .panel p{margin:8px 0;color:#b8c5db;line-height:1.55}
+  .panel button,.btn{border:0;border-radius:12px;padding:11px 16px;background:#4f79a8;color:white;font-weight:700;cursor:pointer}
   .panel button:hover,.btn:hover{filter:brightness(1.08)}
   .controls{display:flex;align-items:center;justify-content:space-between;gap:12px}
-  .hint{font-size:13px;color:#9eb0d4}
+  .hint{font-size:13px;color:#9caec7}
   .dpad{display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px 48px;gap:5px}
-  .dpad button{background:#18234a;border:1px solid #304071;color:white;border-radius:10px;font-size:20px;font-weight:800;touch-action:none;user-select:none;-webkit-user-select:none}
+  .dpad button{background:#111a2d;border:1px solid #2b3b57;color:white;border-radius:10px;font-size:20px;font-weight:800;touch-action:none;user-select:none;-webkit-user-select:none}
   .dpad .u{grid-column:2;grid-row:1}.dpad .l{grid-column:1;grid-row:2}.dpad .r{grid-column:3;grid-row:2}.dpad .d{grid-column:2;grid-row:3}
-  .log{font-size:13px;color:#b7c4e3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+  .log{font-size:13px;color:#b6c4d8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
   @media (max-width:680px){
     .wrap{height:100vh;width:100vw;gap:6px}
     .top{border-radius:0;border-left:0;border-right:0;padding:8px 10px}
@@ -52,16 +60,20 @@
       <div class="stat">时间 <b id="time">00:00</b></div>
       <div class="stat">迷失值 <b id="lost">0</b></div>
       <div class="stat">难度 <b id="difficulty">50</b></div>
-      <div class="stat signal">出口 <b class="signal-arrow" id="exitArrow">?</b><span id="exitSignal">未知</span></div>
+      <div class="stat">阶段 <b id="phaseName">探索</b></div>
+      <div class="stat signal">目标 <b class="signal-arrow" id="exitArrow">?</b><span id="exitSignal">未知</span></div>
     </div>
   </div>
 
   <div class="game-shell" id="shell">
     <canvas id="game"></canvas>
+    <div class="progress-badge neutral" id="progressBadge">当前目标：信标Ⅰ</div>
+    <div class="minimap-wrap"><div class="minimap-title">记忆地图</div><canvas id="minimap" width="150" height="150"></canvas></div>
+    <div class="beacon-status" id="beaconStatus">○ 信标Ⅰ　○ 信标Ⅱ　○ 出口</div>
     <div class="overlay" id="overlay">
       <div class="panel">
         <h1>动态迷宫</h1>
-        <p>你只能看到附近区域。顶部“出口感应器”始终给出出口的大致方向和信号强弱；迷宫会根据你的行为改变结构。</p>
+        <p>你只能看到附近区域。整局分为探索、迷宫苏醒、逃脱三阶段。先找到信标Ⅰ，再找到信标Ⅱ，最后寻找出口；顶部会始终指向当前目标。</p>
         <p>电脑：方向键 / WASD　手机：下方方向键或在画面上滑动</p>
         <button id="startBtn">开始游戏</button>
       </div>
@@ -92,13 +104,18 @@
   const exitArrowEl = document.getElementById('exitArrow');
   const exitSignalEl = document.getElementById('exitSignal');
   const logEl = document.getElementById('log');
+  const phaseNameEl = document.getElementById('phaseName');
+  const progressBadge = document.getElementById('progressBadge');
+  const beaconStatusEl = document.getElementById('beaconStatus');
+  const minimap = document.getElementById('minimap');
+  const mctx = minimap.getContext('2d');
 
   const COLS = 31, ROWS = 31;
   const VISION = 5;
   const MIN_PATH_BUFFER = 8;
   const TARGET_SECONDS = 240;
 
-  let maze, seen, player, start, exit, running=false, startedAt=0, lastMoveAt=0;
+  let maze, seen, rememberedMaze, player, start, exit, running=false, startedAt=0, lastMoveAt=0;
   let moveCount=0, backtracks=0, deadEnds=0, sameCellVisits=0, recentMoves=[];
   let visitCount, lastPos, difficulty=50, directorTimer=0, elapsed=0;
   let hazards=[], particles=[], messageCooldown=0;
@@ -110,6 +127,9 @@
   let rescueUntil=0, rescueCooldownUntil=0, rescuePath=[];
   let bestPathLen=Infinity, lastProgressAt=0;
   let cachedSignal='未知', lastSignalAt=0;
+  let beacons=[], stage=0, currentTarget=null;
+  let lastDistanceToTarget=null, correctStreak=0, progressText='当前目标：信标Ⅰ', progressTone='neutral';
+  let pendingMazeChange=false;
 
   function resize(){
     const r = shell.getBoundingClientRect();
@@ -192,17 +212,97 @@
     return best;
   }
 
+
+  function chooseBeaconOnPath(path, ratio){
+    if(!path || path.length<8) return path[Math.max(1,Math.floor(path.length*ratio))] || start;
+    const baseIndex=Math.max(2,Math.min(path.length-3,Math.floor((path.length-1)*ratio)));
+    const base=path[baseIndex];
+    // Prefer a nearby side branch so the beacon requires a little exploration, but never far away.
+    const q=[{...base,d:0}], seenQ=new Set([key(base.x,base.y)]);
+    const candidates=[];
+    for(let qi=0;qi<q.length;qi++){
+      const p=q[qi];
+      if(p.d>=1 && p.d<=4 && isFloor(p.x,p.y)) candidates.push(p);
+      if(p.d>=4) continue;
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx=p.x+dx, ny=p.y+dy, k=key(nx,ny);
+        if(isFloor(nx,ny) && !seenQ.has(k)){
+          seenQ.add(k); q.push({x:nx,y:ny,d:p.d+1});
+        }
+      }
+    }
+    if(candidates.length){
+      candidates.sort((a,b)=>Math.abs(a.d-2)-Math.abs(b.d-2));
+      return {x:candidates[0].x,y:candidates[0].y};
+    }
+    return {x:base.x,y:base.y};
+  }
+
+  function targetLabel(){
+    return stage===0 ? '信标Ⅰ' : stage===1 ? '信标Ⅱ' : '出口';
+  }
+
+  function phaseLabel(){
+    return stage===0 ? '探索' : stage===1 ? '迷宫苏醒' : '逃脱';
+  }
+
+  function updateCurrentTarget(resetProgress=true){
+    currentTarget = stage===0 ? beacons[0] : stage===1 ? beacons[1] : exit;
+    if(resetProgress){
+      const p=bfs(player,currentTarget);
+      lastDistanceToTarget=p ? p.length-1 : null;
+      bestPathLen=p ? p.length : Infinity;
+      lastProgressAt=performance.now();
+      correctStreak=0;
+      progressText=`当前目标：${targetLabel()}`;
+      progressTone='neutral';
+      cachedSignal='未知';
+      lastSignalAt=0;
+    }
+  }
+
+  function activateBeacon(index){
+    if(stage!==index) return;
+    beacons[index].active=true;
+    stage++;
+    updateCurrentTarget(true);
+    rescuePath=[];
+    rescueUntil=0;
+    rescueCooldownUntil=0;
+    if(stage===1){
+      difficulty=Math.min(difficulty,42);
+      pulseMessage('✓ 信标Ⅰ已激活：定位完成。迷宫正在苏醒，当前目标切换为信标Ⅱ。');
+    }else{
+      difficulty=Math.min(difficulty,55);
+      pulseMessage('✓ 信标Ⅱ已激活：出口信号已锁定。进入逃脱阶段。');
+      revealRadius(6);
+    }
+  }
+
   function setupGame(){
     generateMaze();
     start={x:1,y:1};
     exit=farthestFloor(start);
+    const mainPath=bfs(start,exit);
+    beacons=[
+      {...chooseBeaconOnPath(mainPath,0.30),active:false},
+      {...chooseBeaconOnPath(mainPath,0.63),active:false}
+    ];
+    // Keep the two targets distinct and separated.
+    if(beacons[0].x===beacons[1].x && beacons[0].y===beacons[1].y){
+      beacons[1]={...mainPath[Math.min(mainPath.length-2,Math.floor(mainPath.length*.70))],active:false};
+    }
+
     player={...start};
+    stage=0;
+    currentTarget=beacons[0];
     seen=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+    rememberedMaze=Array.from({length:ROWS},()=>Array(COLS).fill(null));
     visitCount=Array.from({length:ROWS},()=>Array(COLS).fill(0));
     hazards=[];
     moveCount=backtracks=deadEnds=sameCellVisits=0;
     recentMoves=[];
-    difficulty=50;
+    difficulty=34; // Exploration starts deliberately calm.
     directorTimer=0;
     exitMoved=false;
     elapsed=0;
@@ -212,9 +312,14 @@
     rescueUntil=0;
     rescueCooldownUntil=0;
     rescuePath=[];
-    const initialPath=bfs(player,exit);
+    pendingMazeChange=false;
+    const initialPath=bfs(player,currentTarget);
     bestPathLen=initialPath ? initialPath.length : Infinity;
     lastProgressAt=performance.now();
+    lastDistanceToTarget=initialPath ? initialPath.length-1 : null;
+    correctStreak=0;
+    progressText='当前目标：信标Ⅰ';
+    progressTone='neutral';
     cachedSignal='未知';
     lastSignalAt=0;
     visitCount[player.y][player.x]=1;
@@ -225,7 +330,10 @@
   function seedHazards(){
     const floors=[];
     for(let y=1;y<ROWS-1;y++) for(let x=1;x<COLS-1;x++){
-      if(isFloor(x,y) && Math.abs(x-start.x)+Math.abs(y-start.y)>8 && Math.abs(x-exit.x)+Math.abs(y-exit.y)>4){
+      const farFromBeacons=beacons.every(b=>Math.abs(x-b.x)+Math.abs(y-b.y)>3);
+      if(isFloor(x,y) && farFromBeacons &&
+         Math.abs(x-start.x)+Math.abs(y-start.y)>8 &&
+         Math.abs(x-exit.x)+Math.abs(y-exit.y)>4){
         floors.push({x,y});
       }
     }
@@ -250,7 +358,10 @@
     for(let dy=-VISION;dy<=VISION;dy++) for(let dx=-VISION;dx<=VISION;dx++){
       const x=player.x+dx,y=player.y+dy;
       if(!inBounds(x,y)) continue;
-      if(dx*dx+dy*dy<=VISION*VISION+2 && lineVisible(player.x,player.y,x,y)) seen[y][x]=2;
+      if(dx*dx+dy*dy<=VISION*VISION+2 && lineVisible(player.x,player.y,x,y)){
+        seen[y][x]=2;
+        rememberedMaze[y][x]=maze[y][x];
+      }
     }
   }
 
@@ -290,20 +401,50 @@
     if(visitCount[ny][nx]>=3) sameCellVisits++;
 
     const exits = [[1,0],[-1,0],[0,1],[0,-1]].filter(([ax,ay])=>isFloor(player.x+ax,player.y+ay)).length;
-    if(exits===1 && !(player.x===exit.x&&player.y===exit.y)) deadEnds++;
+    if(exits===1 && !(player.x===currentTarget.x&&player.y===currentTarget.y)) deadEnds++;
 
     processHazards();
     reveal();
-    const currentPath=bfs(player,exit);
+
+    // Stage completion comes before distance feedback so the next target starts cleanly.
+    if(stage<2 && player.x===beacons[stage].x && player.y===beacons[stage].y){
+      activateBeacon(stage);
+      return;
+    }
+    if(stage===2 && player.x===exit.x && player.y===exit.y){
+      win();
+      return;
+    }
+
+    const currentPath=bfs(player,currentTarget);
+    const currentDistance=currentPath ? currentPath.length-1 : null;
     if(currentPath && currentPath.length < bestPathLen-2){
       bestPathLen=currentPath.length;
       lastProgressAt=performance.now();
     }
-    if(performance.now()<rescueUntil && currentPath){
-      rescuePath=currentPath.slice(1,Math.min(currentPath.length,8));
+    if(currentDistance!==null){
+      if(lastDistanceToTarget===null){
+        progressText=`正在重新定位 ${targetLabel()}`;
+        progressTone='neutral';
+      }else if(currentDistance < lastDistanceToTarget){
+        correctStreak++;
+        progressText=correctStreak>=3 ? `连续 ${correctStreak} 步接近 ${targetLabel()}` : `更接近 ${targetLabel()}`;
+        progressTone='good';
+      }else if(currentDistance > lastDistanceToTarget){
+        correctStreak=0;
+        progressText=`离 ${targetLabel()} 更远了`;
+        progressTone='bad';
+      }else{
+        correctStreak=0;
+        progressText=`与 ${targetLabel()} 距离基本不变`;
+        progressTone='neutral';
+      }
+      lastDistanceToTarget=currentDistance;
     }
 
-    if(player.x===exit.x&&player.y===exit.y) win();
+    if(performance.now()<rescueUntil && currentPath){
+      rescuePath=currentPath.slice(1,Math.min(currentPath.length,6));
+    }
   }
 
   function breathBlocked(x,y){
@@ -357,7 +498,16 @@
   function canSafelyToggle(x,y,newVal){
     const old=maze[y][x];
     maze[y][x]=newVal;
-    const ok=!!bfs(player,exit);
+
+    let ok=!!bfs(player,currentTarget);
+    // A wall change must preserve the entire remaining progression,
+    // not merely the player's immediate target.
+    if(ok && stage===0){
+      ok=!!bfs(beacons[0],beacons[1]) && !!bfs(beacons[1],exit);
+    }else if(ok && stage===1){
+      ok=!!bfs(beacons[1],exit);
+    }
+
     maze[y][x]=old;
     return ok;
   }
@@ -380,9 +530,9 @@
   function mutateNearby(cx,cy,preferOpen=false){
     const now=performance.now();
     // D: hostile wall changes have a global cooldown, and rescue mode suppresses them.
-    if(!preferOpen && (now-lastMutationAt<9000 || now<rescueUntil)) return false;
+    if(!preferOpen && (now-lastMutationAt<22000 || now<rescueUntil)) return false;
 
-    const protectedPath=bfs(player,exit) || [];
+    const protectedPath=bfs(player,currentTarget) || [];
     const protectedKeys=new Set(protectedPath.slice(0,9).map(p=>key(p.x,p.y)));
     const candidates=[];
 
@@ -407,7 +557,13 @@
       const p=candidates[randInt(0,candidates.length-1)];
       maze[p.y][p.x]=p.newVal;
       mutationHistory.set(key(p.x,p.y),now);
-      if(!preferOpen) lastMutationAt=now;
+      if(!preferOpen){
+        lastMutationAt=now;
+        lastDistanceToTarget=null;
+        correctStreak=0;
+        progressText='迷宫发生变化，重新判断';
+        progressTone='neutral';
+      }
       return true;
     }
     return false;
@@ -433,36 +589,53 @@
 
     const now=performance.now();
     const m=playerMetrics();
-    let target=55;
-    if(m.speed>1.3 && m.lostScore<20) target+=18;
-    if(m.backRate<0.12 && m.speed>1.0) target+=8;
-    if(m.lostScore>45) target-=20;
-    if(m.idle>6) target-=8;
-    difficulty += (target-difficulty)*0.22;
-    difficulty=Math.max(10,Math.min(90,difficulty));
 
-    // G: prolonged lack of progress or deep lost-state triggers deterministic assistance.
-    const stalled=(now-lastProgressAt)>35000;
-    if((m.lostScore>=48 || stalled) && now>rescueCooldownUntil){
-      rescuePlayer(stalled ? '你已经很久没有接近出口，救援信号启动。' : '迷失值过高，救援信号启动。');
+    // Three-stage pacing:
+    // exploration = calm; awakening = moderate; escape = tense but readable.
+    let target = stage===0 ? 32 : stage===1 ? 50 : 62;
+    if(m.speed>1.3 && m.lostScore<20) target+=8;
+    if(m.lostScore>45) target-=18;
+    if(m.idle>6) target-=6;
+    difficulty += (target-difficulty)*0.20;
+    difficulty=Math.max(12,Math.min(stage===0?45:stage===1?68:82,difficulty));
+
+    const stalled=(now-lastProgressAt) > (stage===0 ? 22000 : 25000);
+    if((m.lostScore>=42 || stalled) && now>rescueCooldownUntil){
+      rescuePlayer(stalled ? `你已经一段时间没有接近${targetLabel()}，显示一小段正确路线。`
+                           : `迷失值较高，显示通往${targetLabel()}的一小段路线。`);
       return;
     }
 
-    const chance = 0.12 + difficulty/500;
-    if(Math.random()<chance && now>=rescueUntil){
-      const roll=Math.random();
-      if(roll<0.42){
-        const changed=mutateBehindPlayer();
-        if(changed && messageCooldown<=0) pulseMessage('你走远后，某处墙体发生了变化。');
-      }else if(roll<0.72 && difficulty>60){
-        mutateAheadPlayer();
-      }else if(!exitMoved && elapsed>110 && difficulty>72 && m.lostScore<30){
-        moveExitSafely();
-      }
+    // No hostile dynamic wall changes during exploration.
+    if(stage===0 || now<rescueUntil || pendingMazeChange) return;
+
+    // Maze awakens slowly, then becomes a bit more active during escape.
+    const chance = stage===1 ? 0.055 : 0.085;
+    if(Math.random()<chance){
+      const kind=Math.random()<0.55?'behind':'ahead';
+      scheduleMazeChange(kind);
     }
   }
 
-  function mutateBehindPlayer(){
+  function scheduleMazeChange(kind){
+    if(pendingMazeChange || performance.now()<rescueUntil || stage===0) return;
+    pendingMazeChange=true;
+    pulseMessage(kind==='ahead' ? '⚠ 前方远处传来墙体移动的预兆。' : '⚠ 身后远处传来墙体移动的预兆。');
+    setTimeout(()=>{
+      if(!running || performance.now()<rescueUntil){pendingMazeChange=false;return;}
+      const changed=kind==='ahead'?mutateAheadPlayer(true):mutateBehindPlayer(true);
+      if(changed){
+        lastDistanceToTarget=null;
+        correctStreak=0;
+        progressText='迷宫发生变化，正在重新定位';
+        progressTone='neutral';
+        pulseMessage('墙体已经发生变化。');
+      }
+      pendingMazeChange=false;
+    },1300);
+  }
+
+  function mutateBehindPlayer(silent=false){
     if(!lastPos) return false;
     const vx=player.x-lastPos.x, vy=player.y-lastPos.y;
     const cx=player.x-vx*4, cy=player.y-vy*4;
@@ -470,47 +643,29 @@
     return mutateNearby(cx,cy,Math.random()<0.48);
   }
 
-  function mutateAheadPlayer(){
+  function mutateAheadPlayer(silent=false){
     if(!lastPos) return false;
     const vx=player.x-lastPos.x, vy=player.y-lastPos.y;
     const cx=player.x+vx*5, cy=player.y+vy*5;
     if(!inBounds(cx,cy)) return false;
     const changed=mutateNearby(cx,cy,false);
-    if(changed) pulseMessage('远处传来墙体移动的声音。');
+    if(changed && !silent) pulseMessage('远处传来墙体移动的声音。');
     return changed;
   }
 
   function rescuePlayer(reason='救援信号启动。'){
     const now=performance.now();
-    const path=bfs(player,exit);
+    const path=bfs(player,currentTarget);
     if(!path||path.length<2) return;
-    rescueUntil=now+12000;
-    rescueCooldownUntil=now+45000;
-    rescuePath=path.slice(1,Math.min(path.length,8));
-    revealRadius(7);
-    openNearbyWall(player.x,player.y);
-    pulseMessage(reason+' 12 秒内迷宫不会主动封路，地面会显示短暂指引。');
+    rescueUntil=now+10000;
+    rescueCooldownUntil=now+34000;
+    rescuePath=path.slice(1,Math.min(path.length,6));
+    revealRadius(6);
+    lastProgressAt=now;
+    pulseMessage(reason+' 10 秒内暂停主动封路，并显示最多 5 格浅蓝指引。');
   }
 
-  function moveExitSafely(){
-    const dist=Math.abs(exit.x-player.x)+Math.abs(exit.y-player.y);
-    if(exitMoved || dist<MIN_PATH_BUFFER) return;
-    const old={...exit};
-    const candidate=farthestFloor(player);
-    if((candidate.x!==old.x || candidate.y!==old.y) &&
-       Math.abs(candidate.x-player.x)+Math.abs(candidate.y-player.y)>MIN_PATH_BUFFER){
-      exit=candidate;
-      if(!bfs(player,exit)){ exit=old; return; }
-      exitMoved=true;
-      bestPathLen=(bfs(player,exit)||[]).length||Infinity;
-      lastProgressAt=performance.now();
-      shell.classList.remove('exit-shift');
-      void shell.offsetWidth;
-      shell.classList.add('exit-shift');
-      pulseMessage('⚠ 出口发生了移动！出口感应器的方向已经更新。');
-      setTimeout(()=>shell.classList.remove('exit-shift'),800);
-    }
-  }
+  function moveExitSafely(){ return; }
 
   function updateHazards(dt){
     const now=performance.now();
@@ -532,7 +687,7 @@
     const ox=Math.floor(cssW/2 - player?.x*tile - tile/2);
     const oy=Math.floor(cssH/2 - player?.y*tile - tile/2);
 
-    ctx.fillStyle='#050812'; ctx.fillRect(0,0,cssW,cssH);
+    ctx.fillStyle='#03050a'; ctx.fillRect(0,0,cssW,cssH);
     if(!maze||!player) return;
 
     const minX=Math.max(0,Math.floor(-ox/tile)-1), maxX=Math.min(COLS-1,minX+viewTilesX);
@@ -544,14 +699,14 @@
       const px=ox+x*tile, py=oy+y*tile;
 
       if(maze[y][x]===1){
-        ctx.fillStyle=state===2?'#2a3457':'#151b2d';
+        ctx.fillStyle=state===2?'#2b3548':'#121722';
         ctx.fillRect(px,py,tile+1,tile+1);
         if(state===2){
-          ctx.strokeStyle='rgba(160,178,230,.10)';
+          ctx.strokeStyle='rgba(176,194,220,.13)';
           ctx.strokeRect(px+.5,py+.5,tile-1,tile-1);
         }
       }else{
-        ctx.fillStyle=state===2?'#10182d':'#0b1020';
+        ctx.fillStyle=state===2?'#141d2b':'#080c14';
         ctx.fillRect(px,py,tile+1,tile+1);
       }
     }
@@ -563,20 +718,42 @@
       const px=ox+h.x*tile, py=oy+h.y*tile;
       const closed=Math.sin(now*2+h.phase)>0.15;
       const a=closed?.68:.20;
-      ctx.fillStyle=`rgba(120,180,255,${a})`;
+      ctx.fillStyle=`rgba(255,118,68,${a})`;
       ctx.fillRect(px+tile*.12,py+tile*.12,tile*.76,tile*.76);
       if(closed){
-        ctx.strokeStyle='rgba(220,240,255,.9)';
+        ctx.strokeStyle='rgba(255,190,140,.95)';
         ctx.lineWidth=2;
         ctx.strokeRect(px+tile*.18,py+tile*.18,tile*.64,tile*.64);
       }
     }
 
-    if(seen[exit.y][exit.x]>0){
+    // Stage beacons: blue for beacon I, violet for beacon II.
+    for(let i=0;i<beacons.length;i++){
+      const b=beacons[i];
+      const available = b.active || i===stage;
+      if(!available) continue;
+      if(seen[b.y][b.x]===0 && !b.active) continue;
+      const bx=ox+b.x*tile+tile/2, by=oy+b.y*tile+tile/2;
+      ctx.beginPath(); ctx.arc(bx,by,tile*.35,0,Math.PI*2);
+      ctx.fillStyle=b.active ? 'rgba(150,170,190,.22)' : (i===0?'rgba(92,190,255,.18)':'rgba(184,126,255,.18)');
+      ctx.fill();
+      ctx.beginPath(); ctx.arc(bx,by,tile*.22,0,Math.PI*2);
+      ctx.fillStyle=b.active ? '#718093' : (i===0?'#5cbfff':'#b87eff');
+      ctx.fill();
+      ctx.strokeStyle=b.active ? '#9aa8b8' : '#e1ecff';
+      ctx.lineWidth=1.5; ctx.stroke();
+    }
+
+    if(stage===2 && seen[exit.y][exit.x]>0){
       const px=ox+exit.x*tile+tile/2, py=oy+exit.y*tile+tile/2;
+      if(seen[exit.y][exit.x]===2){
+        const pulse=.28+.10*Math.sin(performance.now()/380);
+        ctx.beginPath(); ctx.arc(px,py,tile*(.40+pulse*.08),0,Math.PI*2);
+        ctx.fillStyle='rgba(62,224,187,.16)'; ctx.fill();
+      }
       ctx.beginPath(); ctx.arc(px,py,tile*.28,0,Math.PI*2);
-      ctx.fillStyle=seen[exit.y][exit.x]===2?'#62e6a8':'#2d654f'; ctx.fill();
-      ctx.strokeStyle='#c7ffe2'; ctx.lineWidth=2; ctx.stroke();
+      ctx.fillStyle=seen[exit.y][exit.x]===2?'#3ee0bb':'#1f665a'; ctx.fill();
+      ctx.strokeStyle='#b9fff0'; ctx.lineWidth=2; ctx.stroke();
     }
 
     if(performance.now()<rescueUntil && rescuePath.length){
@@ -584,25 +761,27 @@
         const p=rescuePath[i];
         const bx=ox+p.x*tile+tile/2, by=oy+p.y*tile+tile/2;
         ctx.beginPath(); ctx.arc(bx,by,Math.max(2,tile*.09),0,Math.PI*2);
-        ctx.fillStyle=`rgba(120,220,255,${0.9-i*0.08})`; ctx.fill();
+        ctx.fillStyle=`rgba(126,211,255,${0.9-i*0.08})`; ctx.fill();
       }
     }
 
     const px=ox+player.x*tile+tile/2, py=oy+player.y*tile+tile/2;
+    ctx.beginPath(); ctx.arc(px,py,tile*.42,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,200,87,.10)'; ctx.fill();
     ctx.beginPath(); ctx.arc(px,py,tile*.29,0,Math.PI*2);
-    ctx.fillStyle='#ffcf5b'; ctx.fill();
-    ctx.strokeStyle='#fff3c0'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='#ffc857'; ctx.fill();
+    ctx.strokeStyle='#fff1b8'; ctx.lineWidth=2; ctx.stroke();
 
     // Soft vignette around vision radius.
     const grad=ctx.createRadialGradient(cssW/2,cssH/2,tile*2,cssW/2,cssH/2,tile*(VISION+1.4));
     grad.addColorStop(0,'rgba(0,0,0,0)');
-    grad.addColorStop(.7,'rgba(0,0,0,.10)');
-    grad.addColorStop(1,'rgba(0,0,0,.72)');
+    grad.addColorStop(.68,'rgba(0,0,0,.08)');
+    grad.addColorStop(1,'rgba(0,0,0,.66)');
     ctx.fillStyle=grad; ctx.fillRect(0,0,cssW,cssH);
   }
 
   function exitDirection(){
-    const dx=exit.x-player.x, dy=exit.y-player.y;
+    const dx=currentTarget.x-player.x, dy=currentTarget.y-player.y;
     if(dx===0 && dy===0) return '◎';
     const ax=Math.abs(dx), ay=Math.abs(dy);
     let sx=dx===0?0:(dx>0?1:-1);
@@ -621,14 +800,45 @@
     const now=performance.now();
     if(now-lastSignalAt<300) return cachedSignal;
     lastSignalAt=now;
-    const path=bfs(player,exit);
+    const path=bfs(player,currentTarget);
     const d=path?path.length-1:999;
-    if(d<=10) cachedSignal='极强';
-    else if(d<=22) cachedSignal='很强';
-    else if(d<=38) cachedSignal='中等';
-    else if(d<=58) cachedSignal='微弱';
-    else cachedSignal='很微弱';
+    if(d<=8) cachedSignal=`${targetLabel()} · 极强`;
+    else if(d<=18) cachedSignal=`${targetLabel()} · 很强`;
+    else if(d<=32) cachedSignal=`${targetLabel()} · 中等`;
+    else if(d<=50) cachedSignal=`${targetLabel()} · 微弱`;
+    else cachedSignal=`${targetLabel()} · 很微弱`;
     return cachedSignal;
+  }
+
+  function drawMinimap(){
+    if(!rememberedMaze) return;
+    const w=minimap.width, h=minimap.height;
+    mctx.clearRect(0,0,w,h);
+    mctx.fillStyle='#03050a'; mctx.fillRect(0,0,w,h);
+    const cw=w/COLS, ch=h/ROWS;
+
+    for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
+      if(seen[y][x]===0 || rememberedMaze[y][x]===null) continue;
+      mctx.fillStyle=rememberedMaze[y][x]===1 ? '#273044' : '#101824';
+      mctx.fillRect(x*cw,y*ch,Math.ceil(cw),Math.ceil(ch));
+    }
+
+    for(let i=0;i<beacons.length;i++){
+      const b=beacons[i];
+      const available = b.active || i===stage;
+      if(!available) continue;
+      if(!b.active && seen[b.y][b.x]===0) continue;
+      mctx.fillStyle=b.active ? '#7b8795' : (i===0?'#5cbfff':'#b87eff');
+      mctx.beginPath(); mctx.arc((b.x+.5)*cw,(b.y+.5)*ch,Math.max(2,cw*.62),0,Math.PI*2); mctx.fill();
+    }
+
+    if(stage===2 && seen[exit.y][exit.x]>0){
+      mctx.fillStyle='#3ee0bb';
+      mctx.beginPath(); mctx.arc((exit.x+.5)*cw,(exit.y+.5)*ch,Math.max(2,cw*.66),0,Math.PI*2); mctx.fill();
+    }
+
+    mctx.fillStyle='#ffc857';
+    mctx.beginPath(); mctx.arc((player.x+.5)*cw,(player.y+.5)*ch,Math.max(2.2,cw*.68),0,Math.PI*2); mctx.fill();
   }
 
   function updateUI(){
@@ -637,8 +847,14 @@
     const m=playerMetrics();
     lostEl.textContent=m.lostScore;
     diffEl.textContent=Math.round(difficulty);
+    phaseNameEl.textContent=phaseLabel();
     exitArrowEl.textContent=exitDirection();
     exitSignalEl.textContent=exitSignalStrength();
+    progressBadge.textContent=progressText;
+    progressBadge.className=`progress-badge ${progressTone}`;
+    beaconStatusEl.textContent =
+      `${beacons[0]?.active?'✓':'○'} 信标Ⅰ　${beacons[1]?.active?'✓':'○'} 信标Ⅱ　${stage===2?'●':'○'} 出口`;
+    drawMinimap();
   }
 
   function pulseMessage(msg){
@@ -674,7 +890,7 @@
     startedAt=performance.now();
     lastFrameAt=startedAt;
     lastMoveAt=startedAt;
-    pulseMessage('迷宫正在观察你的行动。');
+    pulseMessage('探索开始：先找到信标Ⅰ。探索阶段不会主动改变墙体。');
   }
 
   function gameLoop(t){
