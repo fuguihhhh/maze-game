@@ -354,7 +354,8 @@
       scanCooldownMs=16000;
       scanReadyAt=0; // immediate free recharge
       scanPulseUntil=performance.now()+3200;
-      ambiencePulse=performance.now()+2600;\n      escapeSurgeAt=performance.now()+7000;
+      ambiencePulse=performance.now()+2600;
+      escapeSurgeAt=performance.now()+7000;
       revealScanArea(12);
       eventFreezeUntil=performance.now()+10000;
       progressText='信标Ⅱ：出口锁定，扫描强化';
@@ -1293,6 +1294,10 @@
   }
 
   function startGame(){
+    running=false;
+    activeChoice=null;
+    choiceStartedAt=0;
+    choiceOverlay.style.display='none';
     setupGame();
     overlay.style.display='none';
     running=true;
@@ -1323,10 +1328,22 @@
     requestAnimationFrame(gameLoop);
   }
 
-  startBtn.addEventListener('click',startGame);
-  scanBtn.addEventListener('click',useScan);
-  choiceA.addEventListener('click',()=>resolveChoice('A'));
-  choiceB.addEventListener('click',()=>resolveChoice('B'));
+  function bindControls(){
+    if(!startBtn) throw new Error('startBtn missing');
+    startBtn.onclick=()=>{
+      try{ startGame(); }
+      catch(err){
+        console.error(err);
+        startBtn.textContent='启动失败，请刷新';
+        startBtn.disabled=false;
+        logEl.textContent='游戏初始化失败：'+(err?.message||err);
+      }
+    };
+    scanBtn.onclick=useScan;
+    choiceA.onclick=()=>resolveChoice('A');
+    choiceB.onclick=()=>resolveChoice('B');
+  }
+  bindControls();
 
   const keyMap={
     ArrowUp:[0,-1],w:[0,-1],W:[0,-1],
