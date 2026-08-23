@@ -34,6 +34,17 @@
   .panel button,.btn{border:0;border-radius:12px;padding:11px 16px;background:#4f79a8;color:white;font-weight:700;cursor:pointer}
   .panel button:hover,.btn:hover{filter:brightness(1.08)}
   .controls{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .control-actions{display:flex;align-items:center;gap:10px}
+  .scan-btn{min-width:108px;background:#17324a;border:1px solid #38779c;color:#dff6ff;border-radius:12px;padding:10px 12px;font-weight:800;cursor:pointer;touch-action:none}
+  .scan-btn.ready{box-shadow:0 0 18px rgba(92,191,255,.18)}
+  .scan-btn:disabled{opacity:.48;cursor:default}
+  .choice-overlay{position:absolute;inset:0;z-index:6;display:none;align-items:center;justify-content:center;background:rgba(2,5,9,.52);backdrop-filter:blur(2px)}
+  .choice-card{width:min(88%,520px);background:#0d1422;border:1px solid #33455f;border-radius:16px;padding:18px;box-shadow:0 18px 55px rgba(0,0,0,.42)}
+  .choice-card h3{margin:0 0 6px;font-size:20px}
+  .choice-card p{margin:0 0 14px;color:#b9c7dc;line-height:1.55}
+  .choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .choice-grid button{border:1px solid #35516f;border-radius:12px;background:#142238;color:#edf6ff;padding:12px;text-align:left;font-weight:800;cursor:pointer}
+  .choice-grid button small{display:block;margin-top:5px;color:#9eb4cb;font-weight:500;line-height:1.35}
   .hint{font-size:13px;color:#9caec7}
   .dpad{display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px 48px;gap:5px}
   .dpad button{background:#111a2d;border:1px solid #2b3b57;color:white;border-radius:10px;font-size:20px;font-weight:800;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -43,8 +54,11 @@
     .wrap{height:100vh;width:100vw;gap:6px}
     .top{border-radius:0;border-left:0;border-right:0;padding:8px 10px}
     .game-shell{border-radius:0}
-    .controls{padding:0 8px 8px}
-    .log{max-width:48%}
+    .controls{padding:0 8px 8px;gap:6px}
+    .control-actions{gap:6px}
+    .scan-btn{min-width:90px;padding:9px 8px;font-size:12px}
+    .dpad{grid-template-columns:42px 42px 42px;grid-template-rows:42px 42px 42px}
+    .log{max-width:35%;font-size:12px}
     .hint{display:none}
   }
 </style>
@@ -70,11 +84,21 @@
     <div class="progress-badge neutral" id="progressBadge">当前目标：信标Ⅰ</div>
     <div class="minimap-wrap"><div class="minimap-title">记忆地图</div><canvas id="minimap" width="150" height="150"></canvas></div>
     <div class="beacon-status" id="beaconStatus">○ 信标Ⅰ　○ 信标Ⅱ　○ 出口</div>
+    <div class="choice-overlay" id="choiceOverlay">
+      <div class="choice-card">
+        <h3 id="choiceTitle">迷宫事件</h3>
+        <p id="choiceText"></p>
+        <div class="choice-grid">
+          <button id="choiceA"></button>
+          <button id="choiceB"></button>
+        </div>
+      </div>
+    </div>
     <div class="overlay" id="overlay">
       <div class="panel">
         <h1>动态迷宫</h1>
         <p>你只能看到附近区域。整局分为探索、迷宫苏醒、逃脱三阶段。先找到信标Ⅰ，再找到信标Ⅱ，最后寻找出口；顶部会始终指向当前目标。</p>
-        <p>电脑：方向键 / WASD　手机：下方方向键或在画面上滑动</p>
+        <p>电脑：方向键 / WASD；信标Ⅰ后解锁 Q 键扫描。手机可用方向键、滑动和“扫描”按钮。迷宫中还会出现可选择的小事件。</p>
         <button id="startBtn">开始游戏</button>
       </div>
     </div>
@@ -82,11 +106,14 @@
 
   <div class="controls">
     <div class="log" id="log">准备进入迷宫。</div>
-    <div class="dpad">
+    <div class="control-actions">
+      <button class="scan-btn" id="scanBtn">扫描：未解锁</button>
+      <div class="dpad">
       <button class="u" data-dir="up">▲</button>
       <button class="l" data-dir="left">◀</button>
       <button class="r" data-dir="right">▶</button>
-      <button class="d" data-dir="down">▼</button>
+        <button class="d" data-dir="down">▼</button>
+      </div>
     </div>
   </div>
 </div>
@@ -109,9 +136,15 @@
   const beaconStatusEl = document.getElementById('beaconStatus');
   const minimap = document.getElementById('minimap');
   const mctx = minimap.getContext('2d');
+  const scanBtn = document.getElementById('scanBtn');
+  const choiceOverlay = document.getElementById('choiceOverlay');
+  const choiceTitle = document.getElementById('choiceTitle');
+  const choiceText = document.getElementById('choiceText');
+  const choiceA = document.getElementById('choiceA');
+  const choiceB = document.getElementById('choiceB');
 
   const COLS = 31, ROWS = 31;
-  const VISION = 5;
+  const VISION = 8;
   const MIN_PATH_BUFFER = 8;
   const TARGET_SECONDS = 240;
 
@@ -130,6 +163,9 @@
   let beacons=[], stage=0, currentTarget=null;
   let lastDistanceToTarget=null, correctStreak=0, progressText='当前目标：信标Ⅰ', progressTone='neutral';
   let pendingMazeChange=false;
+  let scanUnlocked=false, scanReadyAt=0, scanPulseUntil=0, scanCooldownMs=24000;
+  let eventNodes=[], activeChoice=null, eventFreezeUntil=0, choiceStartedAt=0;
+  let camX=1, camY=1;
 
   function resize(){
     const r = shell.getBoundingClientRect();
@@ -269,13 +305,28 @@
     rescuePath=[];
     rescueUntil=0;
     rescueCooldownUntil=0;
+
     if(stage===1){
       difficulty=Math.min(difficulty,42);
-      pulseMessage('✓ 信标Ⅰ已激活：定位完成。迷宫正在苏醒，当前目标切换为信标Ⅱ。');
+      scanUnlocked=true;
+      scanReadyAt=0;
+      scanCooldownMs=24000;
+      scanPulseUntil=performance.now()+2600;
+      revealScanArea(10);
+      progressText='信标Ⅰ：扫描能力已解锁';
+      progressTone='good';
+      pulseMessage('✓ 信标Ⅰ激活：扫描能力解锁。你可以主动扫描周围更大区域；迷宫开始苏醒。');
     }else{
       difficulty=Math.min(difficulty,55);
-      pulseMessage('✓ 信标Ⅱ已激活：出口信号已锁定。进入逃脱阶段。');
-      revealRadius(6);
+      scanUnlocked=true;
+      scanCooldownMs=16000;
+      scanReadyAt=0; // immediate free recharge
+      scanPulseUntil=performance.now()+3200;
+      revealScanArea(12);
+      eventFreezeUntil=performance.now()+10000;
+      progressText='信标Ⅱ：出口锁定，扫描强化';
+      progressTone='good';
+      pulseMessage('✓ 信标Ⅱ激活：扫描冷却缩短并立即充能；出口锁定，10 秒内迷宫保持稳定。');
     }
   }
 
@@ -294,6 +345,7 @@
     }
 
     player={...start};
+    camX=player.x; camY=player.y;
     stage=0;
     currentTarget=beacons[0];
     seen=Array.from({length:ROWS},()=>Array(COLS).fill(0));
@@ -313,6 +365,13 @@
     rescueCooldownUntil=0;
     rescuePath=[];
     pendingMazeChange=false;
+    scanUnlocked=false;
+    scanReadyAt=0;
+    scanPulseUntil=0;
+    scanCooldownMs=24000;
+    activeChoice=null;
+    eventFreezeUntil=0;
+    choiceStartedAt=0;
     const initialPath=bfs(player,currentTarget);
     bestPathLen=initialPath ? initialPath.length : Infinity;
     lastProgressAt=performance.now();
@@ -325,6 +384,7 @@
     visitCount[player.y][player.x]=1;
     reveal();
     seedHazards();
+    seedChoiceEvents();
   }
 
   function seedHazards(){
@@ -347,6 +407,119 @@
       {type:'trap', ...floors.pop(), armed:true},
       {type:'light', ...floors.pop(), armed:true},
     ];
+  }
+
+  function seedChoiceEvents(){
+    const segments=[
+      bfs(start,beacons[0]),
+      bfs(beacons[0],beacons[1]),
+      bfs(beacons[1],exit)
+    ];
+    const types=['stabilizer','shortcut','charger'];
+    eventNodes=[];
+
+    for(let i=0;i<segments.length;i++){
+      const path=segments[i];
+      if(!path || path.length<10) continue;
+      const desired=Math.floor(path.length*(i===1?0.48:0.55));
+      let chosen=null;
+
+      // Search near the desired point for a safe event cell.
+      for(let off=0;off<Math.min(10,path.length);off++){
+        for(const sign of [1,-1]){
+          const idx=Math.max(2,Math.min(path.length-3,desired+off*sign));
+          const p=path[idx];
+          if(!p) continue;
+          if(beacons.some(b=>Math.abs(p.x-b.x)+Math.abs(p.y-b.y)<4)) continue;
+          if(Math.abs(p.x-exit.x)+Math.abs(p.y-exit.y)<4) continue;
+          if(hazards.some(h=>Math.abs(p.x-h.x)+Math.abs(p.y-h.y)<2)) continue;
+          chosen={x:p.x,y:p.y};
+          break;
+        }
+        if(chosen) break;
+      }
+      if(chosen) eventNodes.push({...chosen,type:types[i],used:false,phase:i});
+    }
+  }
+
+  function triggerChoiceEvent(node){
+    if(node.used || activeChoice) return;
+    node.used=true;
+    activeChoice=node;
+    choiceStartedAt=performance.now();
+    const defs={
+      shortcut:{
+        title:'岔路终端',
+        text:'你可以强行打开一条近路，但迷宫会更警觉；也可以请求一次安全路线分析。',
+        a:'冒险开路', aSmall:'尝试打开附近捷径；难度 +8',
+        b:'路线分析', bSmall:'显示当前目标前方 5 格正确路线'
+      },
+      charger:{
+        title:'能量站',
+        text:'只能选择一种用途：给扫描器立即充能，或让迷宫短时间保持稳定。',
+        a:'扫描充能', aSmall:'扫描立即可用',
+        b:'稳定迷宫', bSmall:'18 秒内不发生主动墙体变化'
+      },
+      stabilizer:{
+        title:'控制节点',
+        text:'你可以获得更多地图信息，或者换取一段更安全的时间。',
+        a:'扩展地图', aSmall:'扫描并记录大范围结构',
+        b:'降低警觉', bSmall:'难度下降，并暂停动态墙 12 秒'
+      }
+    };
+    const d=defs[node.type];
+    choiceTitle.textContent=d.title;
+    choiceText.textContent=d.text;
+    choiceA.innerHTML=`${d.a}<small>${d.aSmall}</small>`;
+    choiceB.innerHTML=`${d.b}<small>${d.bSmall}</small>`;
+    choiceOverlay.style.display='flex';
+  }
+
+  function resolveChoice(which){
+    if(!activeChoice) return;
+    const node=activeChoice;
+    const now=performance.now();
+    if(choiceStartedAt>0) startedAt += Math.max(0,now-choiceStartedAt);
+    choiceStartedAt=0;
+    activeChoice=null;
+    choiceOverlay.style.display='none';
+
+    if(node.type==='shortcut'){
+      if(which==='A'){
+        const gain=openUsefulShortcut(player.x,player.y);
+        difficulty=Math.min(90,difficulty+8);
+        pulseMessage(gain>0 ? `你打开了一条捷径，预计少走约 ${gain} 格；迷宫警觉度上升。`
+                            : '附近没有明显捷径，只打开了一条备用通道；迷宫警觉度上升。');
+      }else{
+        const path=bfs(player,currentTarget);
+        rescuePath=path?path.slice(1,Math.min(path.length,6)):[];
+        rescueUntil=now+8000;
+        pulseMessage('路线分析完成：8 秒内显示最多 5 格正确路线。');
+      }
+    }else if(node.type==='charger'){
+      if(which==='A'){
+        if(scanUnlocked){
+          scanReadyAt=0;
+          pulseMessage('扫描器已立即充能。');
+        }else{
+          revealScanArea(9);
+          pulseMessage('扫描尚未解锁，能量转化为一次临时地图脉冲。');
+        }
+      }else{
+        eventFreezeUntil=now+18000;
+        pulseMessage('迷宫稳定 18 秒。');
+      }
+    }else{
+      if(which==='A'){
+        revealScanArea(stage>=2?13:11);
+        scanPulseUntil=now+1800;
+        pulseMessage('控制节点扩展了你的记忆地图。');
+      }else{
+        difficulty=Math.max(15,difficulty-10);
+        eventFreezeUntil=now+12000;
+        pulseMessage('迷宫警觉度下降，12 秒内保持稳定。');
+      }
+    }
   }
 
   function shuffle(a){for(let i=a.length-1;i>0;i--){const j=randInt(0,i);[a[i],a[j]]=[a[j],a[i]];}return a;}
@@ -378,8 +551,16 @@
     return true;
   }
 
+  function updateCamera(){
+    const dead=2.4;
+    if(player.x-camX>dead) camX=player.x-dead;
+    else if(player.x-camX<-dead) camX=player.x+dead;
+    if(player.y-camY>dead) camY=player.y-dead;
+    else if(player.y-camY<-dead) camY=player.y+dead;
+  }
+
   function move(dx,dy){
-    if(!running) return;
+    if(!running || activeChoice) return;
     const nx=player.x+dx, ny=player.y+dy;
     if(!inBounds(nx,ny)) return;
     if(maze[ny][nx]===1 || breathBlocked(nx,ny)){
@@ -391,6 +572,7 @@
     if(lastPos && nx===lastPos.x && ny===lastPos.y) backtracks++;
     lastPos={...player};
     player.x=nx; player.y=ny;
+    updateCamera();
     moveCount++;
     lastMoveAt=now;
 
@@ -405,6 +587,12 @@
 
     processHazards();
     reveal();
+
+    const eventHere=eventNodes.find(e=>!e.used && e.x===player.x && e.y===player.y);
+    if(eventHere){
+      triggerChoiceEvent(eventHere);
+      return;
+    }
 
     // Stage completion comes before distance feedback so the next target starts cleanly.
     if(stage<2 && player.x===beacons[stage].x && player.y===beacons[stage].y){
@@ -489,6 +677,36 @@
     }
   }
 
+  function revealScanArea(r){
+    for(let y=Math.max(0,player.y-r);y<=Math.min(ROWS-1,player.y+r);y++){
+      for(let x=Math.max(0,player.x-r);x<=Math.min(COLS-1,player.x+r);x++){
+        const d2=(x-player.x)**2+(y-player.y)**2;
+        if(d2<=r*r){
+          seen[y][x]=Math.max(seen[y][x],1);
+          rememberedMaze[y][x]=maze[y][x];
+        }
+      }
+    }
+  }
+
+  function useScan(){
+    if(!running || activeChoice) return;
+    if(!scanUnlocked){
+      pulseMessage('扫描能力将在信标Ⅰ激活后解锁。');
+      return;
+    }
+    const now=performance.now();
+    if(now<scanReadyAt){
+      pulseMessage(`扫描充能中，还需 ${Math.ceil((scanReadyAt-now)/1000)} 秒。`);
+      return;
+    }
+    const radius=stage>=2?12:10;
+    revealScanArea(radius);
+    scanPulseUntil=now+1800;
+    scanReadyAt=now+scanCooldownMs;
+    pulseMessage(stage>=2?'扫描脉冲：大范围结构已写入记忆地图。':'扫描脉冲：附近结构已写入记忆地图。');
+  }
+
   function revealRadius(r){
     for(let y=Math.max(0,player.y-r);y<=Math.min(ROWS-1,player.y+r);y++)
       for(let x=Math.max(0,player.x-r);x<=Math.min(COLS-1,player.x+r);x++)
@@ -510,6 +728,37 @@
 
     maze[y][x]=old;
     return ok;
+  }
+
+  function openUsefulShortcut(cx,cy){
+    const before=bfs(player,currentTarget);
+    const beforeLen=before?before.length:Infinity;
+    const candidates=[];
+
+    for(let y=Math.max(1,cy-4);y<=Math.min(ROWS-2,cy+4);y++){
+      for(let x=Math.max(1,cx-4);x<=Math.min(COLS-2,cx+4);x++){
+        if(maze[y][x]!==1) continue;
+        if(Math.abs(x-player.x)+Math.abs(y-player.y)<=1) continue;
+        const h=isFloor(x-1,y)&&isFloor(x+1,y);
+        const v=isFloor(x,y-1)&&isFloor(x,y+1);
+        if(!(h||v)) continue;
+
+        maze[y][x]=0;
+        const after=bfs(player,currentTarget);
+        const afterLen=after?after.length:Infinity;
+        maze[y][x]=1;
+
+        if(afterLen<beforeLen) candidates.push({x,y,gain:beforeLen-afterLen});
+      }
+    }
+
+    if(candidates.length){
+      candidates.sort((a,b)=>b.gain-a.gain);
+      maze[candidates[0].y][candidates[0].x]=0;
+      return candidates[0].gain;
+    }
+    openNearbyWall(cx,cy);
+    return 0;
   }
 
   function openNearbyWall(cx,cy){
@@ -607,7 +856,7 @@
     }
 
     // No hostile dynamic wall changes during exploration.
-    if(stage===0 || now<rescueUntil || pendingMazeChange) return;
+    if(stage===0 || now<rescueUntil || now<eventFreezeUntil || pendingMazeChange || activeChoice) return;
 
     // Maze awakens slowly, then becomes a bit more active during escape.
     const chance = stage===1 ? 0.055 : 0.085;
@@ -682,10 +931,10 @@
     const cssW=canvas.clientWidth||800, cssH=canvas.clientHeight||600;
     ctx.clearRect(0,0,cssW,cssH);
 
-    const tile=Math.floor(Math.min(cssW/13, cssH/13));
+    const tile=Math.max(18,Math.floor(Math.min(cssW/19, cssH/19)));
     const viewTilesX=Math.ceil(cssW/tile)+2, viewTilesY=Math.ceil(cssH/tile)+2;
-    const ox=Math.floor(cssW/2 - player?.x*tile - tile/2);
-    const oy=Math.floor(cssH/2 - player?.y*tile - tile/2);
+    const ox=Math.floor(cssW/2 - camX*tile - tile/2);
+    const oy=Math.floor(cssH/2 - camY*tile - tile/2);
 
     ctx.fillStyle='#03050a'; ctx.fillRect(0,0,cssW,cssH);
     if(!maze||!player) return;
@@ -727,6 +976,20 @@
       }
     }
 
+    // Small decision events: visible only when currently seen.
+    for(const e of eventNodes){
+      if(e.used || seen[e.y]?.[e.x]!==2) continue;
+      const ex=ox+e.x*tile+tile/2, ey=oy+e.y*tile+tile/2;
+      ctx.save();
+      ctx.translate(ex,ey);
+      ctx.rotate(Math.PI/4);
+      ctx.fillStyle=e.type==='shortcut'?'#ff9c55':e.type==='charger'?'#6fd7ff':'#c98bff';
+      ctx.fillRect(-tile*.16,-tile*.16,tile*.32,tile*.32);
+      ctx.strokeStyle='rgba(255,255,255,.72)';
+      ctx.lineWidth=1.2; ctx.strokeRect(-tile*.16,-tile*.16,tile*.32,tile*.32);
+      ctx.restore();
+    }
+
     // Stage beacons: blue for beacon I, violet for beacon II.
     for(let i=0;i<beacons.length;i++){
       const b=beacons[i];
@@ -766,6 +1029,16 @@
     }
 
     const px=ox+player.x*tile+tile/2, py=oy+player.y*tile+tile/2;
+
+    if(performance.now()<scanPulseUntil){
+      const remaining=(scanPulseUntil-performance.now())/1800;
+      const pulseAge=Math.max(0,Math.min(1,1-remaining));
+      const rr=tile*(2.5+pulseAge*7.5);
+      ctx.beginPath(); ctx.arc(px,py,rr,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(92,191,255,${Math.max(0,.45-pulseAge*.4)})`;
+      ctx.lineWidth=2; ctx.stroke();
+    }
+
     ctx.beginPath(); ctx.arc(px,py,tile*.42,0,Math.PI*2);
     ctx.fillStyle='rgba(255,200,87,.10)'; ctx.fill();
     ctx.beginPath(); ctx.arc(px,py,tile*.29,0,Math.PI*2);
@@ -773,10 +1046,11 @@
     ctx.strokeStyle='#fff1b8'; ctx.lineWidth=2; ctx.stroke();
 
     // Soft vignette around vision radius.
-    const grad=ctx.createRadialGradient(cssW/2,cssH/2,tile*2,cssW/2,cssH/2,tile*(VISION+1.4));
+    const grad=ctx.createRadialGradient(px,py,tile*4.2,px,py,tile*(VISION+1.8));
     grad.addColorStop(0,'rgba(0,0,0,0)');
-    grad.addColorStop(.68,'rgba(0,0,0,.08)');
-    grad.addColorStop(1,'rgba(0,0,0,.66)');
+    grad.addColorStop(.62,'rgba(0,0,0,.04)');
+    grad.addColorStop(.86,'rgba(0,0,0,.20)');
+    grad.addColorStop(1,'rgba(0,0,0,.56)');
     ctx.fillStyle=grad; ctx.fillRect(0,0,cssW,cssH);
   }
 
@@ -854,6 +1128,20 @@
     progressBadge.className=`progress-badge ${progressTone}`;
     beaconStatusEl.textContent =
       `${beacons[0]?.active?'✓':'○'} 信标Ⅰ　${beacons[1]?.active?'✓':'○'} 信标Ⅱ　${stage===2?'●':'○'} 出口`;
+    const now=performance.now();
+    if(!scanUnlocked){
+      scanBtn.textContent='扫描：信标Ⅰ解锁';
+      scanBtn.disabled=true;
+      scanBtn.classList.remove('ready');
+    }else if(now>=scanReadyAt){
+      scanBtn.textContent='扫描：可用';
+      scanBtn.disabled=false;
+      scanBtn.classList.add('ready');
+    }else{
+      scanBtn.textContent=`扫描：${Math.ceil((scanReadyAt-now)/1000)}s`;
+      scanBtn.disabled=true;
+      scanBtn.classList.remove('ready');
+    }
     drawMinimap();
   }
 
@@ -890,7 +1178,7 @@
     startedAt=performance.now();
     lastFrameAt=startedAt;
     lastMoveAt=startedAt;
-    pulseMessage('探索开始：先找到信标Ⅰ。探索阶段不会主动改变墙体。');
+    pulseMessage('探索开始：视野已扩大。先找到信标Ⅰ；之后会解锁主动扫描能力。');
   }
 
   function gameLoop(t){
@@ -909,6 +1197,9 @@
   }
 
   startBtn.addEventListener('click',startGame);
+  scanBtn.addEventListener('click',useScan);
+  choiceA.addEventListener('click',()=>resolveChoice('A'));
+  choiceB.addEventListener('click',()=>resolveChoice('B'));
 
   const keyMap={
     ArrowUp:[0,-1],w:[0,-1],W:[0,-1],
@@ -917,6 +1208,12 @@
     ArrowRight:[1,0],d:[1,0],D:[1,0],
   };
   window.addEventListener('keydown',e=>{
+    if(e.key==='q' || e.key==='Q'){
+      e.preventDefault();
+      useScan();
+      return;
+    }
+    if(activeChoice) return;
     if(keyMap[e.key]){
       e.preventDefault();
       move(...keyMap[e.key]);
