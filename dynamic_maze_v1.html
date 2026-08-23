@@ -120,9 +120,9 @@
           <div class="legend-item"><span class="legend-icon legend-dot legend-b2"></span><span><b>信标Ⅱ</b><div class="legend-note">紫色；强化扫描并锁定出口</div></span></div>
           <div class="legend-item"><span class="legend-icon legend-dot legend-exit"></span><span><b>出口</b><div class="legend-note">青绿色；逃脱阶段启用</div></span></div>
           <div class="legend-item"><span class="legend-icon legend-event"></span><span><b>选择事件</b><div class="legend-note">菱形；踩上后进行二选一</div></span></div>
-          <div class="legend-item"><span class="legend-icon legend-scan"></span><span><b>扫描</b><div class="legend-note">Q键/扫描按钮；扩大记忆地图</div></span></div>
+          <div class="legend-item"><span class="legend-icon legend-scan"></span><span><b>扫描</b><div class="legend-note">Q键/扫描按钮；短暂显示路线走廊和附近动态机关</div></span></div>
           <div class="legend-item"><span class="legend-icon legend-rescue"></span><span><b>救援路径</b><div class="legend-note">浅蓝点；卡住时提示前几格</div></span></div>
-          <div class="legend-item"><span class="legend-icon legend-wall"></span><span><b>真实墙体变化</b><div class="legend-note">只有橙色预警才表示墙真的变了</div></span></div>
+          <div class="legend-item"><span class="legend-icon legend-wall"></span><span><b>真实墙体变化</b><div class="legend-note">橙色预警后才会真的变化；含回头墙、背后开门、镜像岔路</div></span></div>
         </div>
         <p>暗色区域只是“记忆中的迷宫”，不是墙在移动。真正结构变化一定会先出现橙色预警。</p>
         <p>电脑：方向键 / WASD；信标Ⅰ后按 Q 扫描。手机：方向键、滑动和“扫描”按钮。</p>
@@ -191,6 +191,7 @@
   let lastDistanceToTarget=null, correctStreak=0, progressText='当前目标：信标Ⅰ', progressTone='neutral';
   let pendingMazeChange=false;
   let scanUnlocked=false, scanReadyAt=0, scanPulseUntil=0, scanCooldownMs=24000;
+  let scanGuideUntil=0, scanGuidePath=[], scanHazardsUntil=0;
   let wallChangeFx=[];
   let ambiencePulse=0, escapeSurgeAt=0, lastAmbientEventAt=0;
   let eventNodes=[], activeChoice=null, eventFreezeUntil=0, choiceStartedAt=0;
@@ -340,6 +341,7 @@
       scanUnlocked=true;
       scanReadyAt=0;
       scanCooldownMs=24000;
+    scanGuideUntil=0; scanGuidePath=[]; scanHazardsUntil=0;
     wallChangeFx=[];
     ambiencePulse=0; escapeSurgeAt=0; lastAmbientEventAt=0;
       scanPulseUntil=performance.now()+2600;
@@ -432,14 +434,19 @@
       }
     }
     shuffle(floors);
+
+    const take=()=>floors.length?floors.pop():{x:1,y:1};
     hazards = [
-      {type:'breath', ...floors.pop(), phase:Math.random()*Math.PI*2},
-      {type:'fakeDead', ...floors.pop(), armed:true, timer:0},
-      {type:'backOpen', ...floors.pop(), armed:true},
-      {type:'mirror', ...floors.pop(), used:false},
-      {type:'trap', ...floors.pop(), armed:true},
-      {type:'trap', ...floors.pop(), armed:true},
-      {type:'light', ...floors.pop(), armed:true},
+      {type:'breath', ...take(), phase:Math.random()*Math.PI*2},
+      {type:'breath', ...take(), phase:Math.random()*Math.PI*2},
+      {type:'breath', ...take(), phase:Math.random()*Math.PI*2},
+      {type:'fakeDead', ...take(), armed:true, timer:0},
+      {type:'backOpen', ...take(), armed:true, pending:false},
+      {type:'mirror', ...take(), used:false, pending:false},
+      {type:'turnWall', ...take(), armed:true, primed:false, pending:false},
+      {type:'trap', ...take(), armed:true},
+      {type:'trap', ...take(), armed:true},
+      {type:'light', ...take(), armed:true},
     ];
   }
 
@@ -678,34 +685,99 @@
     );
   }
 
+  function addWallWarningFx(x,y,duration=950){
+    wallChangeFx.push({x,y,started:performance.now(),duration,kind:'warning'});
+  }
+
+  function scheduleOpenNear(cx,cy,label){
+    const candidates=[];
+    for(let y=Math.max(1,cy-2);y<=Math.min(ROWS-2,cy+2);y++){
+      for(let x=Math.max(1,cx-2);x<=Math.min(COLS-2,cx+2);x++){
+        if(maze[y][x]!==1) continue;
+        if(Math.abs(x-player.x)+Math.abs(y-player.y)<=1) continue;
+        const h=isFloor(x-1,y)&&isFloor(x+1,y);
+        const v=isFloor(x,y-1)&&isFloor(x,y+1);
+        if(h||v) candidates.push({x,y});
+      }
+    }
+    if(!candidates.length) return false;
+    const p=candidates[randInt(0,candidates.length-1)];
+    addWallWarningFx(p.x,p.y,1000);
+    pulseMessage(`⚠ 橙色预警：${label}`);
+    setTimeout(()=>{
+      if(!running) return;
+      maze[p.y][p.x]=0;
+      rememberedMaze[p.y][p.x]=0;
+      wallChangeFx.push({x:p.x,y:p.y,started:performance.now(),duration:1100,kind:'open'});
+      pulseMessage(`${label}：通道已经打开。`);
+    },900);
+    return true;
+  }
+
+  function scheduleMirrorShift(cx,cy){
+    addWallWarningFx(cx,cy,1050);
+    pulseMessage('⚠ 橙色预警：镜像岔路即将重排。');
+    setTimeout(()=>{
+      if(!running) return;
+      const changedOpen=mutateNearby(cx,cy,true,true);
+      const changedClose=mutateNearby(cx,cy,false,true);
+      pulseMessage((changedOpen||changedClose)?'镜像岔路已经重排。':'镜像岔路震动了一下，但结构保持稳定。');
+    },950);
+  }
+
+  function scheduleTurnWall(cx,cy){
+    addWallWarningFx(cx,cy,1000);
+    pulseMessage('⚠ 橙色预警：你刚经过的区域正在闭合。');
+    setTimeout(()=>{
+      if(!running) return;
+      const changed=mutateNearby(cx,cy,false,true);
+      pulseMessage(changed?'回头墙已经升起。':'回头墙尝试变化，但安全系统阻止了封路。');
+    },900);
+  }
+
   function processHazards(){
     for(const h of hazards){
       const d=Math.abs(h.x-player.x)+Math.abs(h.y-player.y);
+
       if(h.type==='trap' && h.armed && d===0){
         h.armed=false;
-        difficulty=Math.max(0,difficulty-8);
-        pulseMessage('你踩中了迟滞陷阱：迷宫暂时变得更温和。');
+        difficulty=Math.min(90,difficulty+5);
+        pulseMessage('橙色陷阱触发：迷宫警觉度上升。');
       }
+
       if(h.type==='fakeDead' && h.armed && d===0){
         h.timer=performance.now();
-        pulseMessage('这里似乎是死路……也许等一下？');
+        pulseMessage('这里像是死路……墙面开始微微发橙光。');
       }
-      if(h.type==='backOpen' && h.armed && d===0){
+
+      if(h.type==='backOpen' && h.armed && d===0 && !h.pending){
+        h.pending=true;
         h.armed=false;
         setTimeout(()=>{
           if(!running) return;
-          openNearbyWall(h.x,h.y);
-          pulseMessage('你身后传来了一声轻响。');
-        },1000);
+          scheduleOpenNear(h.x,h.y,'背后开门');
+        },650);
       }
-      if(h.type==='mirror' && !h.used && d===0){
+
+      if(h.type==='mirror' && !h.used && d===0 && !h.pending){
+        h.pending=true;
         h.used=true;
-        mutateNearby(h.x,h.y,true);
-        pulseMessage('这个路口好像和刚才不一样。');
+        scheduleMirrorShift(h.x,h.y);
       }
+
+      // Primed when crossed; actual wall change occurs only after player has moved away.
+      if(h.type==='turnWall' && h.armed){
+        if(d===0) h.primed=true;
+        if(h.primed && d>=3 && !h.pending){
+          h.pending=true;
+          h.armed=false;
+          scheduleTurnWall(h.x,h.y);
+        }
+      }
+
       if(h.type==='light' && h.armed && d===0){
         h.armed=false;
-        pulseMessage('你发现了一盏微光，附近地图被短暂照亮。');
+        pulseMessage('你发现了一盏微光：周围结构被记录进记忆地图。');
         revealRadius(8);
       }
     }
@@ -734,11 +806,23 @@
       pulseMessage(`扫描充能中，还需 ${Math.ceil((scanReadyAt-now)/1000)} 秒。`);
       return;
     }
+
     const radius=stage>=2?12:10;
     revealScanArea(radius);
+
+    // Useful scan: reveal a short correct-route corridor, not the entire answer.
+    const path=bfs(player,currentTarget);
+    scanGuidePath=path ? path.slice(1,Math.min(path.length,10)) : [];
+    scanGuideUntil=now+(stage>=2?7000:5500);
+
+    // Nearby dynamic mechanisms are highlighted so the player can plan around them.
+    scanHazardsUntil=now+6500;
+
     scanPulseUntil=now+1800;
     scanReadyAt=now+scanCooldownMs;
-    pulseMessage(stage>=2?'扫描脉冲：大范围结构已写入记忆地图。':'扫描脉冲：附近结构已写入记忆地图。');
+    pulseMessage(stage>=2
+      ? '扫描完成：7 秒内显示目标走廊，并标出附近动态机关。'
+      : '扫描完成：短暂显示目标走廊，并标出附近动态机关。');
   }
 
   function revealRadius(r){
@@ -810,10 +894,10 @@
     }
   }
 
-  function mutateNearby(cx,cy,preferOpen=false){
+  function mutateNearby(cx,cy,preferOpen=false,allowVisible=false){
     const now=performance.now();
     // D: hostile wall changes have a global cooldown, and rescue mode suppresses them.
-    if(!preferOpen && (now-lastMutationAt<22000 || now<rescueUntil)) return false;
+    if(!preferOpen && (now-lastMutationAt<13500 || now<rescueUntil)) return false;
 
     const protectedPath=bfs(player,currentTarget) || [];
     const protectedKeys=new Set(protectedPath.slice(0,9).map(p=>key(p.x,p.y)));
@@ -822,7 +906,7 @@
     for(let y=Math.max(1,cy-3);y<=Math.min(ROWS-2,cy+3);y++) for(let x=Math.max(1,cx-3);x<=Math.min(COLS-2,cx+3);x++){
       const playerDist=Math.abs(x-player.x)+Math.abs(y-player.y);
       if(playerDist<4) continue;                     // 不贴脸改墙
-      if(seen[y][x]===2) continue;                   // 不在玩家当前视野内改墙
+      if(!allowVisible && seen[y][x]===2) continue;  // 普通变化不在眼前发生；已预警机关可例外
       if(x===exit.x&&y===exit.y) continue;
       const k=key(x,y);
       if((mutationHistory.get(k)||0)+30000>now) continue; // 同一位置 30 秒内不重复改
@@ -841,13 +925,15 @@
       maze[p.y][p.x]=p.newVal;
       mutationHistory.set(key(p.x,p.y),now);
 
+      // Every real structural change, opening or closing, gets an orange location flash.
+      wallChangeFx.push({
+        x:p.x,y:p.y,
+        started:performance.now(),
+        duration:1200,
+        kind:p.newVal===1?'close':'open'
+      });
+
       if(!preferOpen){
-        wallChangeFx.push({
-          x:p.x,y:p.y,
-          started:performance.now(),
-          duration:1200,
-          kind:p.newVal===1?'close':'open'
-        });
         lastMutationAt=now;
         lastDistanceToTarget=null;
         correctStreak=0;
@@ -889,8 +975,8 @@
     difficulty += (target-difficulty)*0.20;
     difficulty=Math.max(12,Math.min(stage===0?45:stage===1?68:82,difficulty));
 
-    const stalled=(now-lastProgressAt) > (stage===0 ? 22000 : 25000);
-    if((m.lostScore>=42 || stalled) && now>rescueCooldownUntil){
+    const stalled=(now-lastProgressAt) > (stage===0 ? 30000 : 34000);
+    if((m.lostScore>=58 || stalled) && now>rescueCooldownUntil){
       rescuePlayer(stalled ? `你已经一段时间没有接近${targetLabel()}，显示一小段正确路线。`
                            : `迷失值较高，显示通往${targetLabel()}的一小段路线。`);
       return;
@@ -907,7 +993,7 @@
     }
 
     // Maze awakens slowly, then becomes a bit more active during escape.
-    const chance = stage===1 ? 0.065 : 0.100;
+    const chance = stage===1 ? 0.105 : 0.165;
     if(Math.random()<chance){
       const kind=Math.random()<0.55?'behind':'ahead';
       scheduleMazeChange(kind);
@@ -955,12 +1041,12 @@
     const now=performance.now();
     const path=bfs(player,currentTarget);
     if(!path||path.length<2) return;
-    rescueUntil=now+10000;
-    rescueCooldownUntil=now+34000;
-    rescuePath=path.slice(1,Math.min(path.length,6));
+    rescueUntil=now+7500;
+    rescueCooldownUntil=now+42000;
+    rescuePath=path.slice(1,Math.min(path.length,5));
     revealRadius(6);
     lastProgressAt=now;
-    pulseMessage(reason+' 10 秒内暂停主动封路，并显示最多 5 格浅蓝指引。');
+    pulseMessage(reason+' 7.5 秒内暂停主动封路，并显示最多 4 格浅蓝指引。');
   }
 
   function moveExitSafely(){ return; }
@@ -968,10 +1054,9 @@
   function updateHazards(dt){
     const now=performance.now();
     for(const h of hazards){
-      if(h.type==='fakeDead' && h.timer && now-h.timer>1800){
+      if(h.type==='fakeDead' && h.timer && now-h.timer>1500){
         h.timer=0; h.armed=false;
-        openNearbyWall(h.x,h.y);
-        pulseMessage('死路旁的一堵墙缓缓打开了。');
+        scheduleOpenNear(h.x,h.y,'假死路');
       }
     }
   }
@@ -1037,14 +1122,40 @@
     for(const h of hazards){
       if(h.type!=='breath' || !seen[h.y]?.[h.x]) continue;
       const px=ox+h.x*tile, py=oy+h.y*tile;
-      const closed=Math.sin(now*2+h.phase)>0.15;
-      const a=closed?.68:.20;
+      const closed=Math.sin(now*2.8+h.phase)>0.05;
+      const a=closed?.78:.13;
       ctx.fillStyle=`rgba(255,118,68,${a})`;
       ctx.fillRect(px+tile*.12,py+tile*.12,tile*.76,tile*.76);
       if(closed){
         ctx.strokeStyle='rgba(255,190,140,.95)';
         ctx.lineWidth=2;
         ctx.strokeRect(px+tile*.18,py+tile*.18,tile*.64,tile*.64);
+      }
+    }
+
+    // Scan overlay: short route corridor + nearby mechanism markers.
+    const scanNow=performance.now();
+    if(scanNow<scanGuideUntil && scanGuidePath.length){
+      for(let i=0;i<scanGuidePath.length;i++){
+        const p=scanGuidePath[i];
+        const gx=ox+p.x*tile+tile/2, gy=oy+p.y*tile+tile/2;
+        ctx.beginPath();
+        ctx.arc(gx,gy,Math.max(2.5,tile*.08),0,Math.PI*2);
+        ctx.fillStyle=`rgba(80,220,190,${0.85-i*0.06})`;
+        ctx.fill();
+      }
+    }
+
+    if(scanNow<scanHazardsUntil){
+      for(const h of hazards){
+        const d=Math.abs(h.x-player.x)+Math.abs(h.y-player.y);
+        if(d>12) continue;
+        const hx=ox+h.x*tile+tile/2, hy=oy+h.y*tile+tile/2;
+        ctx.beginPath();
+        ctx.arc(hx,hy,tile*.20,0,Math.PI*2);
+        ctx.strokeStyle=h.type==='breath'?'rgba(255,126,72,.95)':'rgba(255,183,92,.88)';
+        ctx.lineWidth=2;
+        ctx.stroke();
       }
     }
 
@@ -1079,7 +1190,7 @@
       ctx.lineWidth=1.5; ctx.stroke();
     }
 
-    if(stage===2 && seen[exit.y][exit.x]>0){
+    if(stage===2 && seen[exit.y][exit.x]>0 && Math.abs(exit.x-player.x)+Math.abs(exit.y-player.y)<=6){
       const px=ox+exit.x*tile+tile/2, py=oy+exit.y*tile+tile/2;
       if(seen[exit.y][exit.x]===2){
         const pulse=.28+.10*Math.sin(performance.now()/380);
@@ -1228,9 +1339,18 @@
       mctx.beginPath(); mctx.arc((b.x+.5)*cw,(b.y+.5)*ch,Math.max(2,cw*.62),0,Math.PI*2); mctx.fill();
     }
 
-    if(stage===2 && seen[exit.y][exit.x]>0){
+    if(stage===2 && seen[exit.y][exit.x]>0 && Math.abs(exit.x-player.x)+Math.abs(exit.y-player.y)<=10){
       mctx.fillStyle='#3ee0bb';
       mctx.beginPath(); mctx.arc((exit.x+.5)*cw,(exit.y+.5)*ch,Math.max(2,cw*.66),0,Math.PI*2); mctx.fill();
+    }
+
+    // Orange flash on memory map = a real structural warning/change.
+    const miniFxNow=performance.now();
+    for(const fx of wallChangeFx){
+      if(miniFxNow-fx.started>=fx.duration) continue;
+      const a=Math.max(.25,1-(miniFxNow-fx.started)/fx.duration);
+      mctx.fillStyle=`rgba(255,132,66,${a})`;
+      mctx.fillRect(fx.x*cw,fx.y*ch,Math.max(3,cw*1.5),Math.max(3,ch*1.5));
     }
 
     mctx.fillStyle='#ffc857';
@@ -1256,7 +1376,7 @@
       scanBtn.disabled=true;
       scanBtn.classList.remove('ready');
     }else if(now>=scanReadyAt){
-      scanBtn.textContent='扫描：可用';
+      scanBtn.textContent='扫描：路线+机关';
       scanBtn.disabled=false;
       scanBtn.classList.add('ready');
     }else{
